@@ -84,3 +84,13 @@ states matter for this app specifically rather than as generic polish.
 The cheap `/health` fetch fired on page load to wake the backend while the shopper reads,
 mitigating (not removing) the **Cold start**. Lives in `warm-up-ping.tsx`.
 _Avoid_: keep-alive, healthcheck (it is a one-shot warm-up, not a recurring probe)
+
+### Checkout outcomes
+
+**Sold-out outcome**:
+The confirmation shown when a paid order lost the last-unit race (backend Sold-out path —
+see [backend](../backend/CONTEXT.md)). The success return carries `outcome=sold_out`, and
+the confirmation page shows "just sold out / you'll be refunded" instead of "order
+confirmed." Distinct from the storefront's per-size **Sold out** button state (a Variant
+with zero stock, shown before checkout).
+_Avoid_: out of stock, failed (the page never says "failed" to the shopper)

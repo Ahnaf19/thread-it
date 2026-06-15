@@ -1,6 +1,7 @@
-"""Checkout + order fulfillment logic (ADR-0006). Naive decrement; v2 hardens it."""
+"""Checkout + order fulfillment logic (ADR-0006). Atomic per-size decrement: ADR-0012."""
 
 import secrets
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,23 +93,52 @@ async def create_pending_order(
     return created
 
 
-async def mark_order_paid(session: AsyncSession, order_number: str) -> Order | None:
-    """Flip pending→paid and decrement stock (naive). Guarded: a no-op if not pending.
+async def _reserve_stock(session: AsyncSession, order: Order) -> bool:
+    """Decrement stock for every line atomically, all-or-nothing (ADR-0012).
 
-    Exactly-once under concurrency (ADR-0010): the order row is locked FOR UPDATE for
-    the whole transaction, so a duplicate/concurrent/out-of-order callback blocks, then
-    observes the committed `paid` status and returns unchanged — never double-applying.
+    Locks each needed Variant row ``FOR UPDATE`` one at a time in a deterministic id order,
+    so any two concurrent orders that share variants acquire them in the same order and
+    can't deadlock. Only if *every* line still has enough stock does it decrement them all;
+    on any shortfall it returns ``False`` having changed nothing — the sold-out path. Under
+    READ COMMITTED the lock makes a concurrent buyer wait and then read the freshly-committed
+    stock, so stock can never go negative.
+    """
+    needed: dict[uuid.UUID, int] = {}
+    for item in order.items:
+        if item.variant_id is not None:
+            needed[item.variant_id] = needed.get(item.variant_id, 0) + item.quantity
+
+    locked: list[tuple[Variant, int]] = []
+    for vid in sorted(needed):  # stable lock-acquisition order across transactions
+        variant = await session.scalar(select(Variant).where(Variant.id == vid).with_for_update())
+        if variant is None or variant.stock < needed[vid]:
+            return False
+        locked.append((variant, needed[vid]))
+
+    for variant, qty in locked:
+        variant.stock -= qty
+    return True
+
+
+async def mark_order_paid(session: AsyncSession, order_number: str) -> Order | None:
+    """Flip pending→paid, decrementing stock atomically. Guarded: a no-op if not pending.
+
+    Exactly-once under concurrency (ADR-0010): the order row is locked FOR UPDATE for the
+    whole transaction, so a duplicate/concurrent/out-of-order callback blocks, then observes
+    the committed status and returns unchanged — never double-applying. Nested inside that
+    lock, the per-size stock decrement is concurrency-safe and all-or-nothing (ADR-0012): if
+    a concurrent buyer took the last unit first, the order takes the sold-out path to `failed`
+    rather than overselling.
     """
     order = await _lock_order(session, order_number)
     if order is None or order.status != OrderStatus.PENDING.value:
         return order
-    assert_transition(OrderStatus.PENDING, OrderStatus.PAID)  # legality (always legal here)
-    order.status = OrderStatus.PAID.value
-    for item in order.items:
-        if item.variant_id is not None:
-            variant = await session.get(Variant, item.variant_id)
-            if variant is not None:
-                variant.stock = variant.stock - item.quantity
+    if await _reserve_stock(session, order):
+        assert_transition(OrderStatus.PENDING, OrderStatus.PAID)
+        order.status = OrderStatus.PAID.value
+    else:
+        assert_transition(OrderStatus.PENDING, OrderStatus.FAILED)  # sold-out path
+        order.status = OrderStatus.FAILED.value
     await session.commit()
     return order
 

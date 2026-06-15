@@ -24,15 +24,28 @@ def postgres_url() -> str:
 
 
 @pytest_asyncio.fixture
-async def db_session(postgres_url):
+async def db_engine(postgres_url):
+    """One engine over a freshly created+dropped schema, per test (isolation)."""
     engine = create_async_engine(postgres_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
+    yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+def db_sessionmaker(db_engine):
+    """A maker of *independent* sessions (own connection each) — for concurrency tests
+    that need real simultaneous transactions, not the single shared `db_session`."""
+    return async_sessionmaker(db_engine, expire_on_commit=False)
+
+
+@pytest_asyncio.fixture
+async def db_session(db_sessionmaker):
+    async with db_sessionmaker() as session:
+        yield session
 
 
 @pytest_asyncio.fixture
