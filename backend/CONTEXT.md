@@ -5,6 +5,13 @@ Owns the catalog, cart, orders, and stock rules.
 
 ## Language
 
+### Roles
+
+**Admin**:
+The single shop owner who manages the catalog (products, per-size stock). The only
+authenticated actor in v1 — credentials live in env, not a user table (see ADR-0005).
+_Avoid_: User, Staff, Seller (there is exactly one, and customers are unauthenticated guests in v1)
+
 ### Catalog
 
 **Product**:
