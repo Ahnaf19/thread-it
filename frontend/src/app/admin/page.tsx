@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { clearToken } from "@/components/admin-auth";
+import { ErrorState, TableSkeleton } from "@/components/state-views";
 import { Button } from "@/components/ui/button";
 import { adminListProducts } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
@@ -11,7 +12,7 @@ import { useAdminResource } from "@/lib/use-admin";
 
 export default function AdminProductsPage() {
   const router = useRouter();
-  const { token, data: products } = useAdminResource(adminListProducts);
+  const { token, status, data: products, reload } = useAdminResource(adminListProducts);
 
   if (!token) return null;
 
@@ -38,8 +39,13 @@ export default function AdminProductsPage() {
         </div>
       </div>
 
-      {products === null ? (
-        <p className="text-zinc-500">Loading…</p>
+      {status === "error" ? (
+        <ErrorState
+          message="Couldn’t load products — the store may be waking up. Try again in a moment."
+          onRetry={reload}
+        />
+      ) : status !== "ready" ? (
+        <TableSkeleton />
       ) : products.length === 0 ? (
         <p className="text-zinc-500">No products yet.</p>
       ) : (

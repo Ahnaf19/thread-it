@@ -42,7 +42,7 @@ jobs:
         run: uv run pytest -q
 
   frontend:
-    name: Frontend (lint + build)
+    name: Frontend (lint + test + build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -72,6 +72,9 @@ jobs:
       - name: Lint (eslint)
         if: steps.changes.outputs.frontend == 'true'
         run: npm run lint
+      - name: Test (vitest)
+        if: steps.changes.outputs.frontend == 'true'
+        run: npm run test:run
       - name: Build
         if: steps.changes.outputs.frontend == 'true'
         run: npm run build
