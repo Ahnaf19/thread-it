@@ -18,7 +18,19 @@ uv run uvicorn app.main:app --reload   # http://localhost:8000
 
 ```bash
 uv run ruff check .
-uv run pytest -q
+uv run pytest -q   # spins a real Postgres via testcontainers (needs Docker, see ADR-0003)
+```
+
+## Database (migrations + seed)
+
+Migrations are Alembic-managed (ADR-0002). `DATABASE_URL` must be set (Supabase
+session-pooler string locally; Render env in prod).
+
+```bash
+uv run alembic upgrade head          # apply migrations
+uv run alembic revision --autogenerate -m "msg"   # create a migration from model changes
+uv run alembic check                 # fail if models drift from migrations
+uv run python -m scripts.seed        # idempotent demo catalog (run once; not on deploy)
 ```
 
 ## Layout
