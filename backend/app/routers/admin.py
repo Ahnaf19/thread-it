@@ -5,9 +5,11 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.crud import admin as crud
+from app.crud import checkout as checkout_crud
 from app.db import SessionDep
 from app.schemas.admin import ProductCreate, ProductUpdate
 from app.schemas.catalog import ProductDetail
+from app.schemas.order import OrderOut
 from app.security import AdminDep, create_access_token, verify_password
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -54,3 +56,11 @@ async def update_product(
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return ProductDetail.from_product(product, settings.new_window_days)
+
+
+@router.get("/orders", response_model=list[OrderOut])
+async def list_orders(
+    _admin: AdminDep, session: SessionDep, status: str | None = None
+) -> list[OrderOut]:
+    orders = await checkout_crud.list_orders(session, status=status)
+    return [OrderOut.model_validate(o) for o in orders]

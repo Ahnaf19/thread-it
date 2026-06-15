@@ -187,6 +187,32 @@ export async function adminListProducts(token: string): Promise<ProductDetail[]>
   return (await adminFetch(token, "/admin/products")).json();
 }
 
+export type OrderItem = {
+  product_name: string;
+  size: string;
+  unit_price: number;
+  quantity: number;
+};
+
+export type Order = {
+  order_number: string;
+  status: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postcode: string;
+  total: number;
+  currency: string;
+  created_at: string;
+  items: OrderItem[];
+};
+
+export async function adminListOrders(token: string): Promise<Order[]> {
+  return (await adminFetch(token, "/admin/orders")).json();
+}
+
 export async function adminCreateProduct(
   token: string,
   input: ProductInput,

@@ -41,7 +41,10 @@ export default function AdminProductsPage() {
     <main className="min-h-screen bg-[#FAFAF8] px-6 py-12 text-[#1A1A1A] sm:px-10">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          <Link href="/admin/orders" className="text-sm underline underline-offset-4">
+            Orders
+          </Link>
           <Link href="/admin/products/new">
             <Button className="bg-lime-400 text-[#1A1A1A] hover:bg-lime-500">New product</Button>
           </Link>
