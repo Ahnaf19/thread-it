@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { useCart } from "@/components/cart-provider";
 
 export function CartBadge() {
+  const pathname = usePathname();
   const { itemCount } = useCart();
+
+  // The bag is a shopper concept — hide it across the admin surface.
+  if (pathname?.startsWith("/admin")) return null;
+
   return (
     <Link
       href="/cart"
