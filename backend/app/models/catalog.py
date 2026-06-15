@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+from app.enums import SIZE_ORDER
 
 
 class Product(Base):
@@ -30,6 +31,23 @@ class Product(Base):
     images: Mapped[list["ProductImage"]] = relationship(
         back_populates="product", cascade="all, delete-orphan", lazy="selectin"
     )
+
+    # Derived shape — the single home for these rules (consumed by schemas + pricing).
+    @property
+    def primary_image(self) -> "ProductImage | None":
+        return min(self.images, key=lambda i: i.position) if self.images else None
+
+    @property
+    def ordered_images(self) -> list["ProductImage"]:
+        return sorted(self.images, key=lambda i: i.position)
+
+    @property
+    def ordered_variants(self) -> list["Variant"]:
+        return sorted(self.variants, key=lambda v: SIZE_ORDER.get(v.size, 99))
+
+    @property
+    def in_stock(self) -> bool:
+        return any(v.stock > 0 for v in self.variants)
 
 
 class Variant(Base):

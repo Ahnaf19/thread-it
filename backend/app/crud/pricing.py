@@ -16,11 +16,6 @@ from app.schemas.cart import CartItemIn, LineStatus, PricedCart, PricedLine
 from app.schemas.catalog import PrimaryImage
 
 
-def _primary_image(product) -> PrimaryImage | None:
-    images = sorted(product.images, key=lambda i: i.position)
-    return PrimaryImage(url=images[0].url, alt=images[0].alt_text) if images else None
-
-
 @dataclass
 class ResolvedLine:
     """A requested line resolved against the live catalog — rich enough for both
@@ -58,7 +53,7 @@ async def resolve_lines(session: AsyncSession, items: list[CartItemIn]) -> list[
                     slug=item.slug,
                     size=item.size,
                     name=product.name if product else item.slug,
-                    primary_image=_primary_image(product) if product else None,
+                    primary_image=PrimaryImage.from_product(product) if product else None,
                     unit_price=product.price if product else 0,
                     requested_qty=item.quantity,
                     effective_qty=item.quantity,
@@ -75,7 +70,7 @@ async def resolve_lines(session: AsyncSession, items: list[CartItemIn]) -> list[
                 slug=item.slug,
                 size=item.size,
                 name=product.name,
-                primary_image=_primary_image(product),
+                primary_image=PrimaryImage.from_product(product),
                 unit_price=product.price,
                 requested_qty=item.quantity,
                 effective_qty=clamped,

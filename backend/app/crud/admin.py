@@ -22,6 +22,11 @@ async def _unique_slug(session: AsyncSession, base: str) -> str:
     return candidate
 
 
+def build_product_images(images_in) -> list[ProductImage]:
+    """ImageIn → ProductImage ORM (shared by create + update)."""
+    return [ProductImage(url=i.url, alt_text=i.alt, position=i.position) for i in images_in]
+
+
 async def get_product_by_slug(session: AsyncSession, slug: str) -> Product | None:
     """Fetch by slug regardless of active state (admin edits drafts too)."""
     return await session.scalar(select(Product).where(Product.slug == slug))
@@ -43,9 +48,7 @@ async def create_product(session: AsyncSession, data: ProductCreate) -> Product:
         category=data.category.value,
         is_active=data.is_active,
         variants=[Variant(size=v.size.value, stock=v.stock) for v in data.variants],
-        images=[
-            ProductImage(url=i.url, alt_text=i.alt, position=i.position) for i in data.images
-        ],
+        images=build_product_images(data.images),
     )
     session.add(product)
     await session.commit()
@@ -74,9 +77,7 @@ async def update_product(
     if data.variants is not None:
         product.variants = [Variant(size=v.size.value, stock=v.stock) for v in data.variants]
     if data.images is not None:
-        product.images = [
-            ProductImage(url=i.url, alt_text=i.alt, position=i.position) for i in data.images
-        ]
+        product.images = build_product_images(data.images)
 
     await session.commit()
     return await get_product_by_slug(session, slug)
