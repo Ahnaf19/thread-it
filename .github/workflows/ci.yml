@@ -1,0 +1,77 @@
+name: CI
+
+# Path-filtered jobs so a frontend-only PR doesn't run the pytest suite and
+# vice versa (see docs/roadmap.md — monorepo deploy hygiene). CD is owned by
+# Vercel/Render auto-deploy on merge to main; Actions = CI only.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needed for the paths-filter to diff against the base.
+          fetch-depth: 0
+      - name: Check for backend changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+      - name: Install uv
+        if: steps.changes.outputs.backend == 'true'
+        uses: astral-sh/setup-uv@v5
+      - name: Sync dependencies
+        if: steps.changes.outputs.backend == 'true'
+        run: uv sync
+      - name: Lint (ruff)
+        if: steps.changes.outputs.backend == 'true'
+        run: uv run ruff check .
+      - name: Test (pytest)
+        if: steps.changes.outputs.backend == 'true'
+        run: uv run pytest -q
+
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for frontend changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+      - name: Setup Node
+        if: steps.changes.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        if: steps.changes.outputs.frontend == 'true'
+        run: npm ci
+      - name: Lint (eslint)
+        if: steps.changes.outputs.frontend == 'true'
+        run: npm run lint
+      - name: Build
+        if: steps.changes.outputs.frontend == 'true'
+        run: npm run build
