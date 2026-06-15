@@ -2,38 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 
-import { clearToken, useAdminToken } from "@/components/admin-auth";
+import { clearToken } from "@/components/admin-auth";
 import { Button } from "@/components/ui/button";
-import { adminListProducts, UnauthorizedError, type ProductDetail } from "@/lib/api";
+import { adminListProducts } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
+import { useAdminResource } from "@/lib/use-admin";
 
 export default function AdminProductsPage() {
   const router = useRouter();
-  const token = useAdminToken();
-  const [products, setProducts] = useState<ProductDetail[] | null>(null);
-
-  useEffect(() => {
-    if (token === null) {
-      router.replace("/admin/login");
-      return;
-    }
-    let active = true;
-    adminListProducts(token)
-      .then((p) => {
-        if (active) setProducts(p);
-      })
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) {
-          clearToken();
-          router.replace("/admin/login");
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [token, router]);
+  const { token, data: products } = useAdminResource(adminListProducts);
 
   if (!token) return null;
 

@@ -1,41 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { clearToken, useAdminToken } from "@/components/admin-auth";
-import { adminListOrders, UnauthorizedError, type Order } from "@/lib/api";
+import { adminListOrders } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
+import { useAdminResource } from "@/lib/use-admin";
 
 const STATUSES = ["all", "paid", "pending", "failed", "cancelled"];
 
 export default function AdminOrdersPage() {
-  const router = useRouter();
-  const token = useAdminToken();
-  const [orders, setOrders] = useState<Order[] | null>(null);
+  const { token, data: orders } = useAdminResource(adminListOrders);
   const [filter, setFilter] = useState("all");
-
-  useEffect(() => {
-    if (token === null) {
-      router.replace("/admin/login");
-      return;
-    }
-    let active = true;
-    adminListOrders(token)
-      .then((o) => {
-        if (active) setOrders(o);
-      })
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) {
-          clearToken();
-          router.replace("/admin/login");
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [token, router]);
 
   if (!token) return null;
 
