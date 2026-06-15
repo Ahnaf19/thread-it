@@ -63,3 +63,25 @@ async def admin_headers(client, admin_password) -> dict[str, str]:
     resp = await client.post("/admin/login", json={"username": "owner", "password": admin_password})
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+class FakeGateway:
+    """Stand-in for SSLCOMMERZ — records the last init and returns a fixed URL."""
+
+    def __init__(self):
+        self.last_call: dict | None = None
+
+    async def initiate_session(self, **kwargs) -> str:
+        self.last_call = kwargs
+        return "https://sandbox.example/gateway/redirect"
+
+
+@pytest.fixture
+def fake_gateway():
+    """Override the SSLCOMMERZ gateway dependency with a fake."""
+    from app.payments import get_gateway
+
+    gateway = FakeGateway()
+    app.dependency_overrides[get_gateway] = lambda: gateway
+    yield gateway
+    app.dependency_overrides.pop(get_gateway, None)
