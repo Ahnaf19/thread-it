@@ -33,7 +33,9 @@ _Avoid_: free-form categories, tags, collections, multiple categories per produc
 
 **Stock**:
 The count of a single Variant available to sell. Lives on the Variant, never on the
-Product. Decremented when an order is paid (naive in v1; concurrency-safe in v2).
+Product. Decremented on the `pending → paid` transition under a per-Variant row lock,
+**all-or-nothing** across the order, and can never go below zero (ADR-0012). The losing
+buyer of a last-unit race takes the **Sold-out path**.
 _Avoid_: Inventory, Quantity (reserve "quantity" for cart line items)
 
 **Size**:
@@ -88,8 +90,10 @@ is confirmed by SSLCOMMERZ; `failed`, `cancelled`, and `fulfilled` are terminal.
 Legal transitions are enforced in code — an illegal move is **rejected** (raises),
 while re-applying the current status is an idempotent **no-op**. The `pending → paid`
 transition is **exactly-once** even under concurrent/duplicate delivery: it runs in
-one transaction that locks the order row (see ADR-0010). The concurrency-safe
-*per-size* stock decrement remains v2 work (#30) layered on top.
+one transaction that locks the order row (see ADR-0010). Nested inside that lock, the
+per-size Stock decrement is concurrency-safe — a per-Variant row lock, all-or-nothing,
+never negative (ADR-0012); a `paid` Order whose stock is gone is impossible, so that
+Order takes the **Sold-out path** to `failed` instead.
 _Avoid_: state, phase
 
 **Fulfilled**:
@@ -104,3 +108,12 @@ of the shopper's browser redirect. May arrive more than once, out of order, or w
 the browser-return callback is also firing — so the handler it drives must be
 idempotent (see *Order status*, ADR-0010).
 _Avoid_: webhook, callback (reserve "IPN" for this specific gateway notification)
+
+**Sold-out path**:
+What happens to the loser of a last-unit race: an Order that paid but whose Stock was
+taken by a concurrent buyer first. Its stock reservation fails, so it transitions to
+`failed` with **nothing decremented** (never a corrupt, oversold Order). The customer
+sees a sold-out confirmation, not "order confirmed." A real shop refunds them; out of
+v2 scope.
+_Avoid_: out of stock (reserve that for the catalog availability of a Variant), cancelled
+(that is a gateway/customer abort, not a fulfillment failure)
