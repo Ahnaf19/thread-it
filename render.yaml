@@ -1,0 +1,30 @@
+# Render Blueprint for the Thread It backend (free tier).
+# Frontend is NOT here — it's deployed by Vercel (root dir = frontend/).
+#
+# Monorepo hygiene: rootDir scopes the build to backend/, and buildFilter stops
+# a frontend-only push from triggering a backend redeploy (avoidable cold-start
+# reset + wasted build minutes). See docs/roadmap.md.
+services:
+  - type: web
+    name: thread-it-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildFilter:
+      paths:
+        - backend/**
+    # uv isn't preinstalled on Render's python runtime, so install it first.
+    buildCommand: pip install uv && uv sync --no-dev
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      # Set in the Render dashboard (mark sensitive). Comma-separated, no trailing
+      # slash — must include the Vercel frontend origin for CORS to pass.
+      - key: CORS_ORIGINS
+        sync: false
+      # Supabase Postgres connection string. Unused by v1 /health; set it now so
+      # it's ready when models land.
+      - key: DATABASE_URL
+        sync: false
