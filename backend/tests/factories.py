@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Product, ProductImage, Variant
+from app.models import Order, OrderItem, Product, ProductImage, Variant
 
 
 async def create_product(
@@ -37,3 +37,36 @@ async def create_product(
     session.add(product)
     await session.commit()
     return product
+
+
+async def create_order(
+    session: AsyncSession,
+    *,
+    order_number: str,
+    status: str = "pending",
+    total: int = 1000,
+    created_at: datetime | None = None,
+    items: list[tuple[str, str, int, int]] | None = None,
+) -> Order:
+    order = Order(
+        order_number=order_number,
+        status=status,
+        name="Guest",
+        email="guest@example.com",
+        phone="01700000000",
+        address="12 Demo Rd",
+        city="Dhaka",
+        postcode="1207",
+        total=total,
+    )
+    if created_at is not None:
+        order.created_at = created_at
+    for product_name, size, unit_price, quantity in items or [("Item", "M", total, 1)]:
+        order.items.append(
+            OrderItem(
+                product_name=product_name, size=size, unit_price=unit_price, quantity=quantity
+            )
+        )
+    session.add(order)
+    await session.commit()
+    return order

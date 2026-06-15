@@ -28,6 +28,15 @@ async def get_order_by_number(session: AsyncSession, order_number: str) -> Order
     return await session.scalar(select(Order).where(Order.order_number == order_number))
 
 
+async def list_orders(session: AsyncSession, *, status: str | None = None) -> list[Order]:
+    """Orders newest-first, optionally filtered by status (admin)."""
+    stmt = select(Order).order_by(Order.created_at.desc())
+    if status is not None:
+        stmt = stmt.where(Order.status == status)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def create_pending_order(
     session: AsyncSession, items: list[CartItemIn], customer: CustomerIn
 ) -> Order:
