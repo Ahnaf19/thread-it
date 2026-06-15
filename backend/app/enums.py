@@ -32,5 +32,6 @@ SIZE_ORDER: dict[str, int] = {size.value: i for i, size in enumerate(Size)}
 class OrderStatus(StrEnum):
     PENDING = "pending"
     PAID = "paid"
+    FULFILLED = "fulfilled"
     FAILED = "failed"
     CANCELLED = "cancelled"

@@ -7,9 +7,10 @@ from app.config import settings
 from app.crud import admin as crud
 from app.crud import checkout as checkout_crud
 from app.db import SessionDep
+from app.order_state import IllegalTransition
 from app.schemas.admin import ProductCreate, ProductUpdate
 from app.schemas.catalog import ProductDetail
-from app.schemas.order import OrderOut
+from app.schemas.order import OrderOut, OrderStatusUpdate
 from app.security import AdminDep, create_access_token, verify_password
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -64,3 +65,17 @@ async def list_orders(
 ) -> list[OrderOut]:
     orders = await checkout_crud.list_orders(session, status=status)
     return [OrderOut.model_validate(o) for o in orders]
+
+
+@router.patch("/orders/{order_number}", response_model=OrderOut)
+async def update_order_status(
+    order_number: str, data: OrderStatusUpdate, _admin: AdminDep, session: SessionDep
+) -> OrderOut:
+    """Admin status transition (e.g. paid → fulfilled). Illegal moves → 409 (ADR-0008)."""
+    try:
+        order = await checkout_crud.transition_order(session, order_number, data.status)
+    except IllegalTransition as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return OrderOut.model_validate(order)

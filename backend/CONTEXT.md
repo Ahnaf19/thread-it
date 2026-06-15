@@ -81,7 +81,18 @@ from a Cart's Line Item, which references the live catalog.
 _Avoid_: Line Item (reserve that for the Cart)
 
 **Order status**:
-The Order's lifecycle: `pending` → `paid` → (`failed` / `cancelled`). v1 transitions
-are naive but guarded against double-application; concurrency-safe, exactly-once
-handling is v2.
+The Order's lifecycle, modelled as an explicit state machine (see ADR-0008):
+`pending` → `paid` → `fulfilled`, with `pending` → `failed` / `cancelled` as the
+unhappy gateway outcomes. `pending` is created before the payment redirect; `paid`
+is confirmed by SSLCOMMERZ; `failed`, `cancelled`, and `fulfilled` are terminal.
+Legal transitions are enforced in code — an illegal move is **rejected** (raises),
+while re-applying the current status is an idempotent **no-op**. Exactly-once IPN
+handling and the concurrency-safe stock decrement are still v2 work that hangs off
+the `pending → paid` transition.
 _Avoid_: state, phase
+
+**Fulfilled**:
+The terminal status an **Admin** sets on a `paid` Order once it has been shipped /
+handed off. The only legal transition into it is `paid → fulfilled` — it is never
+gateway-driven. Distinct from `paid`, which means *payment cleared*, not *shipped*.
+_Avoid_: shipped, completed, done (reserve one canonical term)

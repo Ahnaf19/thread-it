@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.pricing import resolve_lines, to_priced_cart
 from app.enums import OrderStatus
 from app.models import Order, OrderItem, Variant
+from app.order_state import assert_transition
 from app.schemas.cart import CartItemIn, LineStatus, PricedCart
 from app.schemas.checkout import CustomerIn
 
@@ -76,10 +77,15 @@ async def create_pending_order(
 
 
 async def mark_order_paid(session: AsyncSession, order_number: str) -> Order | None:
-    """Flip pending→paid and decrement stock (naive). Guarded: a no-op if not pending."""
+    """Flip pending→paid and decrement stock (naive). Guarded: a no-op if not pending.
+
+    The pending-status guard is the idempotency seam (ADR-0008): a duplicate IPN or a
+    stale callback on an already-resolved order returns unchanged rather than erroring.
+    """
     order = await get_order_by_number(session, order_number)
     if order is None or order.status != OrderStatus.PENDING.value:
         return order
+    assert_transition(OrderStatus.PENDING, OrderStatus.PAID)  # legality (always legal here)
     order.status = OrderStatus.PAID.value
     for item in order.items:
         if item.variant_id is not None:
@@ -93,9 +99,29 @@ async def mark_order_paid(session: AsyncSession, order_number: str) -> Order | N
 async def mark_order_status(
     session: AsyncSession, order_number: str, status: OrderStatus
 ) -> Order | None:
+    """Gateway fail/cancel path. Pending-guarded so a stale callback is a no-op."""
     order = await get_order_by_number(session, order_number)
     if order is None or order.status != OrderStatus.PENDING.value:
         return order
+    assert_transition(OrderStatus.PENDING, status)
     order.status = status.value
     await session.commit()
+    return order
+
+
+async def transition_order(
+    session: AsyncSession, order_number: str, target: OrderStatus
+) -> Order | None:
+    """Apply an arbitrary status transition (admin path), enforcing legality.
+
+    Raises IllegalTransition on a move outside the state machine. Re-applying the
+    current status is an idempotent no-op. Returns None if the order doesn't exist.
+    """
+    order = await get_order_by_number(session, order_number)
+    if order is None:
+        return None
+    assert_transition(OrderStatus(order.status), target)
+    if order.status != target.value:
+        order.status = target.value
+        await session.commit()
     return order
