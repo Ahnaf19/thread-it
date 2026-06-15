@@ -8,6 +8,9 @@ import { WarmUpPing } from "@/components/warm-up-ping";
 import { fetchProduct } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
 
+// ISR: render on demand, cache the HTML, revalidate periodically (see api.ts).
+export const revalidate = 60;
+
 export default async function ProductDetailPage({
   params,
 }: {

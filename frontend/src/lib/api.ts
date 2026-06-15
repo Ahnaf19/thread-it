@@ -52,18 +52,24 @@ export type ProductDetail = {
   variants: Variant[];
 };
 
-// Catalog reads are dynamic (no-store) in v1 — caching is a v4 concern, and it
-// keeps `next build` from hitting the API at build time.
+// Catalog reads are cached and revalidated periodically (not per-request) so the
+// storefront serves from Next's data cache instead of hitting a function→Render on
+// every view — faster, cheaper, and resilient to backend cold starts. Catalog edits
+// (admin) surface within CATALOG_REVALIDATE_SECONDS. Purchase paths re-validate fresh.
+const CATALOG_REVALIDATE_SECONDS = 60;
+
 export async function fetchProducts(category?: string): Promise<ProductSummary[]> {
   const url = new URL(`${API_URL}/products`);
   if (category) url.searchParams.set("category", category);
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, { next: { revalidate: CATALOG_REVALIDATE_SECONDS } });
   if (!res.ok) throw new Error(`Failed to load products (${res.status})`);
   return res.json();
 }
 
 export async function fetchProduct(slug: string): Promise<ProductDetail | null> {
-  const res = await fetch(`${API_URL}/products/${slug}`, { cache: "no-store" });
+  const res = await fetch(`${API_URL}/products/${slug}`, {
+    next: { revalidate: CATALOG_REVALIDATE_SECONDS },
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to load product (${res.status})`);
   return res.json();
