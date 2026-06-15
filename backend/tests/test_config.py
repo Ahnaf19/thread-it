@@ -16,3 +16,10 @@ def test_async_url_normalizes_scheme():
 
 def test_async_url_empty_stays_empty():
     assert Settings(database_url="").database_url_async == ""
+
+
+def test_async_url_strips_trailing_newline():
+    # A pasted env value often carries a trailing newline; it must not leak into
+    # the database name.
+    s = Settings(database_url="postgresql://user:pw@host:5432/postgres\n")
+    assert s.database_url_async == "postgresql+asyncpg://user:pw@host:5432/postgres"
