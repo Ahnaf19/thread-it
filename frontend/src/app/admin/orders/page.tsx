@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { ErrorState, TableSkeleton } from "@/components/state-views";
 import { adminListOrders } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
 import { useAdminResource } from "@/lib/use-admin";
@@ -10,7 +11,7 @@ import { useAdminResource } from "@/lib/use-admin";
 const STATUSES = ["all", "paid", "pending", "failed", "cancelled"];
 
 export default function AdminOrdersPage() {
-  const { token, data: orders } = useAdminResource(adminListOrders);
+  const { token, status, data: orders, reload } = useAdminResource(adminListOrders);
   const [filter, setFilter] = useState("all");
 
   if (!token) return null;
@@ -42,8 +43,13 @@ export default function AdminOrdersPage() {
         ))}
       </nav>
 
-      {orders === null ? (
-        <p className="text-zinc-500">Loading…</p>
+      {status === "error" ? (
+        <ErrorState
+          message="Couldn’t load orders — the store may be waking up. Try again in a moment."
+          onRetry={reload}
+        />
+      ) : status !== "ready" ? (
+        <TableSkeleton />
       ) : shown.length === 0 ? (
         <p className="text-zinc-500">No orders.</p>
       ) : (

@@ -2,41 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
+import { CartSkeleton, ErrorState } from "@/components/state-views";
 import { Button } from "@/components/ui/button";
-import { priceCart, type PricedCart } from "@/lib/api";
+import { priceCart } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
+import { useResource } from "@/lib/use-resource";
 
 export default function CartPage() {
   const { lines, setQty, removeItem } = useCart();
-  const [priced, setPriced] = useState<PricedCart | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (lines.length === 0) return;
-    const controller = new AbortController();
-    let active = true;
-    priceCart(lines, controller.signal)
-      .then((p) => {
-        if (active) {
-          setPriced(p);
-          setError(false);
-        }
-      })
-      .catch((e) => {
-        if (active && e.name !== "AbortError") setError(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [lines]);
+  const { status, data: priced, reload } = useResource(
+    (signal) => priceCart(lines, signal),
+    { enabled: lines.length > 0, deps: [lines] },
+  );
 
   return (
     <main className="min-h-screen bg-[#FAFAF8] px-6 py-12 text-[#1A1A1A] sm:px-10">
@@ -47,11 +26,15 @@ export default function CartPage() {
 
       {lines.length === 0 ? (
         <p className="py-20 text-zinc-500">Your bag is empty.</p>
-      ) : error ? (
-        <p className="py-20 text-red-600">Couldn’t price your bag — try again in a moment.</p>
-      ) : loading && !priced ? (
-        <p className="py-20 text-zinc-500">Pricing your bag…</p>
-      ) : priced ? (
+      ) : status === "error" ? (
+        <ErrorState
+          title="Couldn’t price your bag"
+          message="The store may be waking up. Try again in a moment."
+          onRetry={reload}
+        />
+      ) : status !== "ready" ? (
+        <CartSkeleton />
+      ) : (
         <div className="grid gap-10 lg:grid-cols-[1fr_320px]">
           <ul className="divide-y divide-black/10">
             {priced.items.map((line) => {
@@ -140,7 +123,7 @@ export default function CartPage() {
             )}
           </aside>
         </div>
-      ) : null}
+      )}
     </main>
   );
 }

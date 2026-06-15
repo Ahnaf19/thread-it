@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { clearToken, useAdminToken } from "@/components/admin-auth";
 import { UnauthorizedError } from "@/lib/api";
+import { type Resource, useResource } from "@/lib/use-resource";
 
 // Token guard: returns the admin token, redirecting to /admin/login if absent.
 export function useRequireAdmin(): string | null {
@@ -16,33 +17,33 @@ export function useRequireAdmin(): string | null {
   return token;
 }
 
-// Guard + cancellable fetch + 401→clear→login, in one place. Pass a STABLE
-// fetcher (a module-level function, not an inline arrow) so the effect re-runs
-// only on token change.
+// Guard + the async-state machine (ADR-0009) + 401→clear→login, in one place.
+// Returns the full Resource (status/data/error/reload) so callers render
+// loading / empty / error consistently. A 401 is NOT surfaced as an error: we
+// clear the session and bounce to login, masking it as `loading` while we go.
 export function useAdminResource<T>(
   fetcher: (token: string) => Promise<T>,
-): { token: string | null; data: T | null } {
+): Resource<T> & { token: string | null; reload: () => void } {
   const router = useRouter();
   const token = useRequireAdmin();
-  const [data, setData] = useState<T | null>(null);
+
+  const resource = useResource<T>(() => fetcher(token as string), {
+    enabled: token !== null,
+    deps: [token],
+  });
+
+  const isAuthError =
+    resource.status === "error" && resource.error instanceof UnauthorizedError;
 
   useEffect(() => {
-    if (!token) return;
-    let active = true;
-    fetcher(token)
-      .then((d) => {
-        if (active) setData(d);
-      })
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) {
-          clearToken();
-          router.replace("/admin/login");
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [token, router, fetcher]);
+    if (isAuthError) {
+      clearToken();
+      router.replace("/admin/login");
+    }
+  }, [isAuthError, router]);
 
-  return { token, data };
+  if (isAuthError) {
+    return { token, status: "loading", data: null, error: null, reload: resource.reload };
+  }
+  return { token, ...resource };
 }
