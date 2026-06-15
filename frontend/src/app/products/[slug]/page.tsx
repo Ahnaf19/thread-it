@@ -58,7 +58,7 @@ export default async function ProductDetailPage({
           <p className="mt-6 max-w-prose leading-7 text-zinc-600">{product.description}</p>
 
           <div className="mt-8">
-            <SizeSelector variants={product.variants} />
+            <SizeSelector slug={product.slug} variants={product.variants} />
           </div>
         </div>
       </div>
