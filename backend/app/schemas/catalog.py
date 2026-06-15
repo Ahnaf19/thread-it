@@ -70,6 +70,7 @@ class ProductDetail(BaseModel):
     currency: str
     category: str
     is_new: bool
+    is_active: bool
     images: list[ImageOut]
     variants: list[VariantOut]
 
@@ -85,6 +86,7 @@ class ProductDetail(BaseModel):
             currency=product.currency,
             category=product.category,
             is_new=_is_new(product, new_window_days),
+            is_active=product.is_active,
             images=[ImageOut(url=i.url, alt=i.alt_text, position=i.position) for i in images],
             variants=[VariantOut(size=v.size, stock=v.stock) for v in variants],
         )
