@@ -90,6 +90,20 @@ async def test_duplicate_success_does_not_double_decrement(client, db_session, f
     assert v.stock == 3  # decremented once (5->3), guard prevents twice
 
 
+async def test_duplicate_ipn_delivery_decrements_once(client, db_session, fake_gateway):
+    # AC: the same IPN arriving twice produces a single pending→paid transition.
+    await create_product(db_session, slug="sock", price=300, variants=[("One Size", 5)])
+    num = (await _place(client, "sock", "One Size", 2)).json()["order_number"]
+
+    for _ in range(2):
+        await client.post("/checkout/ipn", data={"tran_id": num, "status": "VALID"})
+
+    order = await get_order_by_number(db_session, num)
+    assert order.status == "paid"
+    v = await db_session.scalar(select(Variant).where(Variant.size == "One Size"))
+    assert v.stock == 3  # decremented once
+
+
 async def test_amount_mismatch_not_paid(client, db_session, fake_gateway):
     await create_product(db_session, slug="scarf", price=900, variants=[("One Size", 4)])
     num = (await _place(client, "scarf", "One Size", 1)).json()["order_number"]
