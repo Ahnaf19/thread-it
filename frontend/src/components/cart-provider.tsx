@@ -72,6 +72,10 @@ export function removeItem(slug: string, size: string) {
   write(read().filter((l) => !(l.slug === slug && l.size === size)));
 }
 
+export function clearCart() {
+  write([]);
+}
+
 export function useCart() {
   const lines = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const itemCount = useMemo(() => lines.reduce((n, l) => n + l.quantity, 0), [lines]);

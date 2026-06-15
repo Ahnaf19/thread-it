@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     secret_key: str = "dev-insecure-change-me"  # JWT signing key — override in prod
     access_token_expire_minutes: int = 720  # 12h
 
+    # SSLCOMMERZ sandbox (see ADR-0007). Store creds in platform env, never the repo.
+    sslcommerz_store_id: str = ""
+    sslcommerz_store_password: str = ""
+    sslcommerz_api_base: str = "https://sandbox.sslcommerz.com"
+    # Where the gateway sends the customer's browser back after payment.
+    frontend_url: str = "http://localhost:3000"
+
     # CORS — comma-separated list of allowed frontend origins.
     # In production this is the Vercel frontend URL; locally it's the Next.js dev server.
     cors_origins: str = "http://localhost:3000"

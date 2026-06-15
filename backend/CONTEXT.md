@@ -65,3 +65,23 @@ when the Cart is priced.
 The sum of Line Item totals (unit price × Quantity) in a Cart, before any shipping
 or tax. v1 has no shipping or tax, so the Subtotal is the cart total.
 _Avoid_: Total, Grand total (no shipping/tax layer exists yet)
+
+### Orders
+
+**Order**:
+A guest's committed purchase. Created in `pending` status at checkout (before the
+payment redirect) and confirmed `paid` when SSLCOMMERZ reports success. Carries the
+guest's contact/shipping details and a total snapshot.
+_Avoid_: Cart (a Cart is the pre-checkout, client-side thing; an Order is server-persisted)
+
+**Order Item**:
+A line of an Order. **Snapshots** product name, size, unit price, and quantity at
+checkout time — so the Order is stable even if the catalog later changes. Distinct
+from a Cart's Line Item, which references the live catalog.
+_Avoid_: Line Item (reserve that for the Cart)
+
+**Order status**:
+The Order's lifecycle: `pending` → `paid` → (`failed` / `cancelled`). v1 transitions
+are naive but guarded against double-application; concurrency-safe, exactly-once
+handling is v2.
+_Avoid_: state, phase

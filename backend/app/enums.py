@@ -27,3 +27,10 @@ class Size(StrEnum):
 
 # Display order for sizes (the selector shows S→M→L, never alphabetical).
 SIZE_ORDER: dict[str, int] = {size.value: i for i, size in enumerate(Size)}
+
+
+class OrderStatus(StrEnum):
+    PENDING = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
