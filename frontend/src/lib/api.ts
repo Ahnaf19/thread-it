@@ -108,6 +108,40 @@ export async function priceCart(
   return res.json();
 }
 
+// ---- Checkout (ADR-0007) ----
+
+export type CheckoutCustomer = {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postcode: string;
+};
+
+// Thrown on 409 — the cart changed (stock/availability) since it was priced.
+export class CartChangedError extends Error {
+  priced: PricedCart;
+  constructor(priced: PricedCart) {
+    super("Your bag changed");
+    this.priced = priced;
+  }
+}
+
+export async function checkout(
+  items: CartLineInput[],
+  customer: CheckoutCustomer,
+): Promise<{ gateway_url: string; order_number: string }> {
+  const res = await fetch(`${API_URL}/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items, customer }),
+  });
+  if (res.status === 409) throw new CartChangedError(await res.json());
+  if (!res.ok) throw new Error(`Checkout failed (${res.status})`);
+  return res.json();
+}
+
 // ---- Admin (JWT bearer; ADR-0005) ----
 
 export class UnauthorizedError extends Error {}

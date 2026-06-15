@@ -126,13 +126,18 @@ export default function CartPage() {
               <span className="font-semibold">{formatTaka(priced.subtotal)}</span>
             </div>
             <p className="mt-1 text-xs text-zinc-500">Shipping calculated at checkout.</p>
-            {/* Inert until checkout (#5). */}
-            <Button
-              disabled={priced.item_count === 0}
-              className="mt-5 w-full bg-lime-400 text-[#1A1A1A] hover:bg-lime-500"
-            >
-              Checkout
-            </Button>
+            {priced.item_count > 0 ? (
+              <Link
+                href="/checkout"
+                className="mt-5 block w-full rounded-md bg-lime-400 py-2 text-center text-sm font-medium text-[#1A1A1A] hover:bg-lime-500"
+              >
+                Checkout
+              </Link>
+            ) : (
+              <Button disabled className="mt-5 w-full">
+                Checkout
+              </Button>
+            )}
           </aside>
         </div>
       ) : null}
