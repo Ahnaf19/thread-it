@@ -57,8 +57,13 @@ async def payment_success(request: Request, session: SessionDep) -> RedirectResp
         and _amount_matches(form.get("amount"), order.total)
     )
     if valid:
-        await crud.mark_order_paid(session, tran_id)
+        resolved = await crud.mark_order_paid(session, tran_id)
+        # Payment was valid but the last unit was taken first → sold-out path (ADR-0011).
+        # Flag it so the confirmation page shows "just sold out", not "order confirmed".
+        sold_out = resolved is not None and resolved.status == OrderStatus.FAILED.value
         target = f"{settings.frontend_url}/checkout/success?order={tran_id}"
+        if sold_out:
+            target += "&outcome=sold_out"
     else:
         target = f"{settings.frontend_url}/checkout/fail"
     return RedirectResponse(target, status_code=303)
