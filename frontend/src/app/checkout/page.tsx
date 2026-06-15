@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
 import { CartChangedError, checkout, type CheckoutCustomer } from "@/lib/api";
+import { fieldClass } from "@/lib/ui";
 
 const EMPTY: CheckoutCustomer = {
   name: "",
@@ -43,7 +44,7 @@ export default function CheckoutPage() {
     }
   }
 
-  const field = "w-full border border-zinc-300 px-3 py-2 text-sm";
+  const field = fieldClass;
 
   if (lines.length === 0) {
     return (

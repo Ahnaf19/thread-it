@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { ProductInput } from "@/lib/api";
+import { fieldClass } from "@/lib/ui";
 
 const CATEGORIES = ["Tops", "Bottoms", "Outerwear", "Dresses", "Accessories"];
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "One Size"];
@@ -50,7 +51,7 @@ export function ProductForm({
     }
   }
 
-  const field = "w-full border border-zinc-300 px-3 py-2 text-sm";
+  const field = fieldClass;
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
