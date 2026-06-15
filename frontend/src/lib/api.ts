@@ -47,6 +47,7 @@ export type ProductDetail = {
   currency: string;
   category: string;
   is_new: boolean;
+  is_active: boolean;
   images: ProductImage[];
   variants: Variant[];
 };
@@ -105,4 +106,74 @@ export async function priceCart(
   });
   if (!res.ok) throw new Error(`Failed to price cart (${res.status})`);
   return res.json();
+}
+
+// ---- Admin (JWT bearer; ADR-0005) ----
+
+export class UnauthorizedError extends Error {}
+
+export type AdminVariantInput = { size: string; stock: number };
+export type AdminImageInput = { url: string; alt: string; position: number };
+export type ProductInput = {
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  is_active: boolean;
+  variants: AdminVariantInput[];
+  images: AdminImageInput[];
+};
+
+export async function adminLogin(username: string, password: string): Promise<string> {
+  const res = await fetch(`${API_URL}/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (res.status === 401) throw new UnauthorizedError("Invalid username or password");
+  if (!res.ok) throw new Error(`Login failed (${res.status})`);
+  return (await res.json()).access_token;
+}
+
+async function adminFetch(token: string, path: string, init: RequestInit = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(init.headers ?? {}),
+    },
+  });
+  if (res.status === 401) throw new UnauthorizedError("Session expired");
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res;
+}
+
+export async function adminListProducts(token: string): Promise<ProductDetail[]> {
+  return (await adminFetch(token, "/admin/products")).json();
+}
+
+export async function adminCreateProduct(
+  token: string,
+  input: ProductInput,
+): Promise<ProductDetail> {
+  return (
+    await adminFetch(token, "/admin/products", {
+      method: "POST",
+      body: JSON.stringify(input),
+    })
+  ).json();
+}
+
+export async function adminUpdateProduct(
+  token: string,
+  slug: string,
+  input: ProductInput,
+): Promise<ProductDetail> {
+  return (
+    await adminFetch(token, `/admin/products/${slug}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    })
+  ).json();
 }
