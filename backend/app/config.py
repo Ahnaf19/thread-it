@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # A Product is "new" if created within this many days (drives the NEW badge).
     new_window_days: int = 14
 
+    # Admin auth (single admin; see ADR-0005). Set in env; never in the repo.
+    admin_username: str = ""
+    admin_password_hash: str = ""  # bcrypt hash
+    secret_key: str = "dev-insecure-change-me"  # JWT signing key — override in prod
+    access_token_expire_minutes: int = 720  # 12h
+
     # CORS — comma-separated list of allowed frontend origins.
     # In production this is the Vercel frontend URL; locally it's the Next.js dev server.
     cors_origins: str = "http://localhost:3000"

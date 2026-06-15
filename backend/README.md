@@ -33,6 +33,20 @@ uv run alembic check                 # fail if models drift from migrations
 uv run python -m scripts.seed        # idempotent demo catalog (run once; not on deploy)
 ```
 
+## Admin auth (single admin; ADR-0005)
+
+Set in env (Render / local `.env`), never in the repo:
+`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` (bcrypt), `SECRET_KEY` (JWT signing, ≥32 bytes).
+
+Generate the password hash:
+
+```bash
+uv run python -c "import bcrypt,getpass; print(bcrypt.hashpw(getpass.getpass().encode(), bcrypt.gensalt()).decode())"
+```
+
+`POST /admin/login` → `{access_token}` (JWT, ~12h); send it as `Authorization: Bearer <token>`
+to the `/admin/*` product-management endpoints.
+
 ## Layout
 
 ```
