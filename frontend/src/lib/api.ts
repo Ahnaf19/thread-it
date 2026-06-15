@@ -20,3 +20,50 @@ export async function fetchHealth(signal?: AbortSignal): Promise<Health> {
   }
   return res.json();
 }
+
+// ---- Catalog ----
+
+export type PrimaryImage = { url: string; alt: string };
+
+export type ProductSummary = {
+  slug: string;
+  name: string;
+  price: number;
+  currency: string;
+  category: string;
+  is_new: boolean;
+  primary_image: PrimaryImage | null;
+  in_stock: boolean;
+};
+
+export type ProductImage = { url: string; alt: string; position: number };
+export type Variant = { size: string; stock: number };
+
+export type ProductDetail = {
+  slug: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  category: string;
+  is_new: boolean;
+  images: ProductImage[];
+  variants: Variant[];
+};
+
+// Catalog reads are dynamic (no-store) in v1 — caching is a v4 concern, and it
+// keeps `next build` from hitting the API at build time.
+export async function fetchProducts(category?: string): Promise<ProductSummary[]> {
+  const url = new URL(`${API_URL}/products`);
+  if (category) url.searchParams.set("category", category);
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to load products (${res.status})`);
+  return res.json();
+}
+
+export async function fetchProduct(slug: string): Promise<ProductDetail | null> {
+  const res = await fetch(`${API_URL}/products/${slug}`, { cache: "no-store" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load product (${res.status})`);
+  return res.json();
+}
