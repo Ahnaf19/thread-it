@@ -2,19 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
-import { useAdminToken } from "@/components/admin-auth";
 import { ProductForm } from "@/components/product-form";
 import { adminCreateProduct, type ProductInput } from "@/lib/api";
+import { useRequireAdmin } from "@/lib/use-admin";
 
 export default function NewProductPage() {
   const router = useRouter();
-  const token = useAdminToken();
-
-  useEffect(() => {
-    if (token === null) router.replace("/admin/login");
-  }, [token, router]);
+  const token = useRequireAdmin();
 
   if (!token) return null;
 

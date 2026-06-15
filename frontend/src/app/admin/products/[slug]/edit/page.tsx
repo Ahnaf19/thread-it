@@ -2,60 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 
-import { clearToken, useAdminToken } from "@/components/admin-auth";
 import { ProductForm } from "@/components/product-form";
-import {
-  adminListProducts,
-  adminUpdateProduct,
-  UnauthorizedError,
-  type ProductInput,
-} from "@/lib/api";
+import { adminListProducts, adminUpdateProduct, type ProductInput } from "@/lib/api";
+import { useAdminResource } from "@/lib/use-admin";
 
 export default function EditProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const router = useRouter();
-  const token = useAdminToken();
-  const [initial, setInitial] = useState<ProductInput | null>(null);
-  const [notFound, setNotFound] = useState(false);
-
-  useEffect(() => {
-    if (token === null) {
-      router.replace("/admin/login");
-      return;
-    }
-    let active = true;
-    adminListProducts(token)
-      .then((products) => {
-        if (!active) return;
-        const p = products.find((x) => x.slug === slug);
-        if (!p) {
-          setNotFound(true);
-          return;
-        }
-        setInitial({
-          name: p.name,
-          description: p.description,
-          price: p.price,
-          category: p.category,
-          is_active: p.is_active,
-          variants: p.variants.map((v) => ({ size: v.size, stock: v.stock })),
-          images: p.images.map((i) => ({ url: i.url, alt: i.alt, position: i.position })),
-        });
-      })
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) {
-          clearToken();
-          router.replace("/admin/login");
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [token, slug, router]);
+  const { token, data: products } = useAdminResource(adminListProducts);
 
   if (!token) return null;
+
+  const product = products?.find((x) => x.slug === slug) ?? null;
+  const notFound = products !== null && product === null;
+  const initial: ProductInput | null = product && {
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    category: product.category,
+    is_active: product.is_active,
+    variants: product.variants.map((v) => ({ size: v.size, stock: v.stock })),
+    images: product.images.map((i) => ({ url: i.url, alt: i.alt, position: i.position })),
+  };
 
   async function handleSubmit(input: ProductInput) {
     await adminUpdateProduct(token!, slug, input);
