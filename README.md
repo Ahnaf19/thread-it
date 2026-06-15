@@ -24,6 +24,24 @@ the catalog and see orders. All on real URLs, behind a green CI pipeline.
 - **Checkout** — guest checkout → SSLCOMMERZ redirect → order recorded, stock decremented
 - **Admin** — JWT login; add/edit products + per-size stock; order list
 
+## v2 — correctness & reliability
+
+The order pipeline is now correct under concurrency and unreliable networks — the
+part that separates a real store from a toy.
+
+- **Concurrency-safe stock** — two shoppers racing for the last unit of a size resolve
+  correctly: a per-size atomic decrement under a row-level lock, with a clean "just sold
+  out" path for the loser ([ADR-0012](docs/adr/0012-per-size-atomic-stock-decrement.md)).
+- **Idempotent IPN** — the SSLCOMMERZ notification can arrive more than once (or the
+  shopper drops off on return); the `pending→paid` transition happens **exactly once** via
+  `SELECT … FOR UPDATE` on the order ([ADR-0010](docs/adr/0010-idempotent-pending-to-paid-row-lock.md)).
+- **Order state machine** — explicit `pending → paid → fulfilled / failed` legal
+  transitions; the pending order is created before the redirect and confirmed by the IPN
+  ([ADR-0008](docs/adr/0008-order-state-machine-legal-transitions.md)).
+- **UI & HTTP correctness** — loading / empty / error states across storefront and admin
+  ([ADR-0009](docs/adr/0009-frontend-async-state-hook.md)); unknown product URLs now return
+  a true `404`, not a soft `200` ([ADR-0011](docs/adr/0011-product-detail-true-404.md)).
+
 ## Monorepo layout
 
 ```
@@ -92,11 +110,9 @@ cd frontend && npm install && cp .env.example .env.local && npm run dev
 
 ## Future work (intentionally out of scope, sequenced by version)
 
-- **v2 — correctness:** concurrency-safe per-size stock decrement (row-level locking),
-  idempotent SSLCOMMERZ IPN, a hardened order state machine. _(The pricing module and the
-  `pending→paid` status guard are the groundwork already in place.)_
 - **v3 — hardening & accounts:** rate limiting, input-validation pass, idempotent checkout,
-  optional customer accounts + order history, structured logging.
+  admin/customer authz boundary, optional customer accounts + order history, structured
+  logging, in-app admin order notifications.
 - **v4 — performance & observability:** broader caching, a metrics view, query/indexing pass.
 - **Explicitly not building:** a message broker, multi-vendor/marketplace, recommendations,
   or reviews — over-engineering at single-shop scale. Naming the non-goals is the point.
