@@ -42,7 +42,10 @@ class Settings(BaseSettings):
         password so connection strings whose password contains URL-reserved chars
         (`@`, `%`, `?`, …) parse correctly — the raw Supabase string works as-is.
         """
-        url = self.database_url
+        # Strip surrounding whitespace — pasting into a platform env field often
+        # appends a trailing newline, which would otherwise land in the DB name
+        # (asyncpg: InvalidCatalogNameError: database "postgres\n" does not exist).
+        url = self.database_url.strip()
         if not url:
             return url
 
