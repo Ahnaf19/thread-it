@@ -2,16 +2,26 @@
 
 import { useState } from "react";
 
+import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
 import type { Variant } from "@/lib/api";
 
 // Presentation threshold for the scarcity hint (PRD Q9) — lives on the frontend.
 const LOW_STOCK_THRESHOLD = 5;
 
-export function SizeSelector({ variants }: { variants: Variant[] }) {
+export function SizeSelector({ slug, variants }: { slug: string; variants: Variant[] }) {
+  const { addItem } = useCart();
   const [selected, setSelected] = useState<string | null>(null);
+  const [added, setAdded] = useState(false);
   const selectedVariant = variants.find((v) => v.size === selected) ?? null;
   const allSoldOut = variants.every((v) => v.stock === 0);
+
+  function handleAdd() {
+    if (!selected) return;
+    addItem(slug, selected);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  }
 
   return (
     <div>
@@ -50,12 +60,12 @@ export function SizeSelector({ variants }: { variants: Variant[] }) {
           </p>
         )}
 
-      {/* Inert until the Cart feature (#4) wires it up. */}
       <Button
+        onClick={handleAdd}
         disabled={allSoldOut || !selected}
         className="mt-6 w-full bg-lime-400 text-[#1A1A1A] hover:bg-lime-500 sm:w-auto"
       >
-        {allSoldOut ? "Sold out" : "Add to bag"}
+        {allSoldOut ? "Sold out" : added ? "Added ✓" : "Add to bag"}
       </Button>
     </div>
   );

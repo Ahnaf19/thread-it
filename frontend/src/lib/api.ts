@@ -67,3 +67,42 @@ export async function fetchProduct(slug: string): Promise<ProductDetail | null> 
   if (!res.ok) throw new Error(`Failed to load product (${res.status})`);
   return res.json();
 }
+
+// ---- Cart (stateless pricing; ADR-0004) ----
+
+export type CartLineInput = { slug: string; size: string; quantity: number };
+export type LineStatus = "ok" | "adjusted" | "unavailable";
+
+export type PricedLine = {
+  slug: string;
+  name: string;
+  size: string;
+  primary_image: PrimaryImage | null;
+  unit_price: number;
+  quantity: number;
+  line_total: number;
+  available_stock: number;
+  status: LineStatus;
+};
+
+export type PricedCart = {
+  items: PricedLine[];
+  subtotal: number;
+  currency: string;
+  item_count: number;
+};
+
+// Called from the browser (cross-origin; covered by CORS for the prod origin).
+export async function priceCart(
+  items: CartLineInput[],
+  signal?: AbortSignal,
+): Promise<PricedCart> {
+  const res = await fetch(`${API_URL}/cart`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`Failed to price cart (${res.status})`);
+  return res.json();
+}

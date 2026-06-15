@@ -220,3 +220,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Private, untracked notes (e.g. pasted deploy logs)
+docs/private/
