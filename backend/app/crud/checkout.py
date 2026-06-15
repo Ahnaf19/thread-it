@@ -96,27 +96,27 @@ async def create_pending_order(
 async def _reserve_stock(session: AsyncSession, order: Order) -> bool:
     """Decrement stock for every line atomically, all-or-nothing (ADR-0012).
 
-    Locks the needed Variant rows ``FOR UPDATE`` in a stable id order (so two concurrent
-    multi-line orders can't deadlock), checks that *every* line still has enough stock,
-    then decrements them all. Returns ``False`` — touching nothing — if any line is short:
-    that's the sold-out path. Under READ COMMITTED the lock makes a concurrent buyer wait
-    and then see the freshly-committed stock, so stock can never go negative.
+    Locks each needed Variant row ``FOR UPDATE`` one at a time in a deterministic id order,
+    so any two concurrent orders that share variants acquire them in the same order and
+    can't deadlock. Only if *every* line still has enough stock does it decrement them all;
+    on any shortfall it returns ``False`` having changed nothing — the sold-out path. Under
+    READ COMMITTED the lock makes a concurrent buyer wait and then read the freshly-committed
+    stock, so stock can never go negative.
     """
     needed: dict[uuid.UUID, int] = {}
     for item in order.items:
         if item.variant_id is not None:
             needed[item.variant_id] = needed.get(item.variant_id, 0) + item.quantity
-    if not needed:
-        return True
 
-    rows = await session.execute(
-        select(Variant).where(Variant.id.in_(list(needed))).order_by(Variant.id).with_for_update()
-    )
-    variants = {v.id: v for v in rows.scalars()}
-    if any(vid not in variants or variants[vid].stock < qty for vid, qty in needed.items()):
-        return False
-    for vid, qty in needed.items():
-        variants[vid].stock -= qty
+    locked: list[tuple[Variant, int]] = []
+    for vid in sorted(needed):  # stable lock-acquisition order across transactions
+        variant = await session.scalar(select(Variant).where(Variant.id == vid).with_for_update())
+        if variant is None or variant.stock < needed[vid]:
+            return False
+        locked.append((variant, needed[vid]))
+
+    for variant, qty in locked:
+        variant.stock -= qty
     return True
 
 
