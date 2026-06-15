@@ -30,10 +30,10 @@ async def create_product(
     )
     if created_at is not None:
         product.created_at = created_at
-    for size, stock in variants or [("One Size", 1)]:
-        product.variants.append(Variant(size=size, stock=stock))
-    for url, alt, position in images or []:
-        product.images.append(ProductImage(url=url, alt_text=alt, position=position))
+    # Assign collections (not append) so they're loaded in-memory — avoids an async
+    # lazy-load when a caller reads e.g. product.primary_image on an empty image set.
+    product.variants = [Variant(size=s, stock=st) for s, st in (variants or [("One Size", 1)])]
+    product.images = [ProductImage(url=u, alt_text=a, position=p) for u, a, p in (images or [])]
     session.add(product)
     await session.commit()
     return product
