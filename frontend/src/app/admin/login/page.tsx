@@ -6,6 +6,7 @@ import { useState } from "react";
 import { setToken } from "@/components/admin-auth";
 import { Button } from "@/components/ui/button";
 import { adminLogin, UnauthorizedError } from "@/lib/api";
+import { fieldClass } from "@/lib/ui";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function AdminLoginPage() {
     }
   }
 
-  const field = "w-full border border-zinc-300 px-3 py-2 text-sm";
+  const field = fieldClass;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#FAFAF8] px-6 text-[#1A1A1A]">
