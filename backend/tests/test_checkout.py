@@ -103,6 +103,22 @@ async def test_amount_mismatch_not_paid(client, db_session, fake_gateway):
     assert order.status == "pending"
 
 
+async def test_fail_callback_after_paid_is_ignored(client, db_session, fake_gateway):
+    # The idempotency seam (ADR-0008): a late gateway callback on an already-resolved
+    # order must be a silent no-op, never override the status or 500 back to the gateway.
+    await create_product(db_session, slug="hat", price=700, variants=[("One Size", 5)])
+    num = (await _place(client, "hat", "One Size", 1)).json()["order_number"]
+    await client.post(
+        "/checkout/success", data={"tran_id": num, "status": "VALID", "amount": "700"}
+    )
+
+    r = await client.post("/checkout/fail", data={"tran_id": num})
+
+    assert r.status_code == 303
+    order = await get_order_by_number(db_session, num)
+    assert order.status == "paid"
+
+
 async def test_cancel_sets_cancelled(client, db_session, fake_gateway):
     await create_product(db_session, slug="dress", price=3000, variants=[("S", 2)])
     num = (await _place(client, "dress", "S", 1)).json()["order_number"]

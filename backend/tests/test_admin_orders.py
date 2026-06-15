@@ -36,3 +36,64 @@ async def test_admin_orders_status_filter(client, db_session, admin_headers):
     data = (await client.get("/admin/orders?status=paid", headers=admin_headers)).json()
 
     assert [o["order_number"] for o in data] == ["TI-P"]
+
+
+async def test_admin_fulfill_paid_order(client, db_session, admin_headers):
+    await create_order(db_session, order_number="TI-PAID", status="paid")
+
+    r = await client.patch(
+        "/admin/orders/TI-PAID", json={"status": "fulfilled"}, headers=admin_headers
+    )
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "fulfilled"
+
+
+async def test_admin_fulfill_requires_auth(client, db_session):
+    await create_order(db_session, order_number="TI-PAID", status="paid")
+
+    r = await client.patch("/admin/orders/TI-PAID", json={"status": "fulfilled"})
+
+    assert r.status_code == 401
+
+
+async def test_admin_fulfill_pending_is_illegal_409(client, db_session, admin_headers):
+    await create_order(db_session, order_number="TI-PEND", status="pending")
+
+    r = await client.patch(
+        "/admin/orders/TI-PEND", json={"status": "fulfilled"}, headers=admin_headers
+    )
+
+    assert r.status_code == 409
+    # Status is unchanged after a rejected transition.
+    data = (await client.get("/admin/orders", headers=admin_headers)).json()
+    assert next(o for o in data if o["order_number"] == "TI-PEND")["status"] == "pending"
+
+
+async def test_admin_fulfill_unknown_order_404(client, admin_headers):
+    r = await client.patch(
+        "/admin/orders/NOPE", json={"status": "fulfilled"}, headers=admin_headers
+    )
+
+    assert r.status_code == 404
+
+
+async def test_admin_fulfill_already_fulfilled_is_idempotent(client, db_session, admin_headers):
+    await create_order(db_session, order_number="TI-FUL", status="fulfilled")
+
+    r = await client.patch(
+        "/admin/orders/TI-FUL", json={"status": "fulfilled"}, headers=admin_headers
+    )
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "fulfilled"
+
+
+async def test_admin_order_patch_rejects_unknown_status_422(client, db_session, admin_headers):
+    await create_order(db_session, order_number="TI-PAID", status="paid")
+
+    r = await client.patch(
+        "/admin/orders/TI-PAID", json={"status": "shipped"}, headers=admin_headers
+    )
+
+    assert r.status_code == 422
