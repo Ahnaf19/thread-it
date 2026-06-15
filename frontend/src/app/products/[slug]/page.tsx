@@ -5,11 +5,22 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { SizeSelector } from "@/components/size-selector";
 import { WarmUpPing } from "@/components/warm-up-ping";
-import { fetchProduct } from "@/lib/api";
+import { fetchProduct, fetchProducts } from "@/lib/api";
 import { formatTaka } from "@/lib/format";
 
-// ISR: render on demand, cache the HTML, revalidate periodically (see api.ts).
+// ISR: prerender known products at build, cache the HTML, revalidate every 60s.
+// dynamicParams (default true) → products added later render on-demand and cache.
 export const revalidate = 60;
+
+export async function generateStaticParams() {
+  try {
+    const products = await fetchProducts();
+    return products.map((p) => ({ slug: p.slug }));
+  } catch {
+    // API unreachable at build → prerender nothing; pages still render on-demand (ISR).
+    return [];
+  }
+}
 
 export default async function ProductDetailPage({
   params,
