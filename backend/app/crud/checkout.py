@@ -28,6 +28,22 @@ async def get_order_by_number(session: AsyncSession, order_number: str) -> Order
     return await session.scalar(select(Order).where(Order.order_number == order_number))
 
 
+async def _lock_order(session: AsyncSession, order_number: str) -> Order | None:
+    """Fetch the order under a row-level write lock (SELECT … FOR UPDATE).
+
+    `populate_existing` refreshes any instance already in the session's identity map
+    so its status reflects the *locked* read — without it, a caller that pre-loaded
+    the order (e.g. /checkout/success validating the amount) would see a stale
+    `pending` snapshot and wrongly re-apply the transition (ADR-0010).
+    """
+    return await session.scalar(
+        select(Order)
+        .where(Order.order_number == order_number)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
 async def list_orders(session: AsyncSession, *, status: str | None = None) -> list[Order]:
     """Orders newest-first, optionally filtered by status (admin)."""
     stmt = select(Order).order_by(Order.created_at.desc())
@@ -79,10 +95,11 @@ async def create_pending_order(
 async def mark_order_paid(session: AsyncSession, order_number: str) -> Order | None:
     """Flip pending→paid and decrement stock (naive). Guarded: a no-op if not pending.
 
-    The pending-status guard is the idempotency seam (ADR-0008): a duplicate IPN or a
-    stale callback on an already-resolved order returns unchanged rather than erroring.
+    Exactly-once under concurrency (ADR-0010): the order row is locked FOR UPDATE for
+    the whole transaction, so a duplicate/concurrent/out-of-order callback blocks, then
+    observes the committed `paid` status and returns unchanged — never double-applying.
     """
-    order = await get_order_by_number(session, order_number)
+    order = await _lock_order(session, order_number)
     if order is None or order.status != OrderStatus.PENDING.value:
         return order
     assert_transition(OrderStatus.PENDING, OrderStatus.PAID)  # legality (always legal here)
@@ -99,8 +116,12 @@ async def mark_order_paid(session: AsyncSession, order_number: str) -> Order | N
 async def mark_order_status(
     session: AsyncSession, order_number: str, status: OrderStatus
 ) -> Order | None:
-    """Gateway fail/cancel path. Pending-guarded so a stale callback is a no-op."""
-    order = await get_order_by_number(session, order_number)
+    """Gateway fail/cancel path. Pending-guarded so a stale callback is a no-op.
+
+    Locks the order row (ADR-0010) so a fail/cancel callback racing a `paid` IPN
+    observes the committed status instead of overwriting it from a stale read.
+    """
+    order = await _lock_order(session, order_number)
     if order is None or order.status != OrderStatus.PENDING.value:
         return order
     assert_transition(OrderStatus.PENDING, status)
@@ -116,8 +137,10 @@ async def transition_order(
 
     Raises IllegalTransition on a move outside the state machine. Re-applying the
     current status is an idempotent no-op. Returns None if the order doesn't exist.
+    Locks the order row (ADR-0010) so the legality check runs against the committed
+    status, not a stale read that races a concurrent gateway transition.
     """
-    order = await get_order_by_number(session, order_number)
+    order = await _lock_order(session, order_number)
     if order is None:
         return None
     assert_transition(OrderStatus(order.status), target)

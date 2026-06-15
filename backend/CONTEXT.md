@@ -86,9 +86,10 @@ The Order's lifecycle, modelled as an explicit state machine (see ADR-0008):
 unhappy gateway outcomes. `pending` is created before the payment redirect; `paid`
 is confirmed by SSLCOMMERZ; `failed`, `cancelled`, and `fulfilled` are terminal.
 Legal transitions are enforced in code — an illegal move is **rejected** (raises),
-while re-applying the current status is an idempotent **no-op**. Exactly-once IPN
-handling and the concurrency-safe stock decrement are still v2 work that hangs off
-the `pending → paid` transition.
+while re-applying the current status is an idempotent **no-op**. The `pending → paid`
+transition is **exactly-once** even under concurrent/duplicate delivery: it runs in
+one transaction that locks the order row (see ADR-0010). The concurrency-safe
+*per-size* stock decrement remains v2 work (#30) layered on top.
 _Avoid_: state, phase
 
 **Fulfilled**:
@@ -96,3 +97,10 @@ The terminal status an **Admin** sets on a `paid` Order once it has been shipped
 handed off. The only legal transition into it is `paid → fulfilled` — it is never
 gateway-driven. Distinct from `paid`, which means *payment cleared*, not *shipped*.
 _Avoid_: shipped, completed, done (reserve one canonical term)
+
+**IPN** (Instant Payment Notification):
+SSLCOMMERZ's server-to-server callback confirming a payment's outcome, independent
+of the shopper's browser redirect. May arrive more than once, out of order, or while
+the browser-return callback is also firing — so the handler it drives must be
+idempotent (see *Order status*, ADR-0010).
+_Avoid_: webhook, callback (reserve "IPN" for this specific gateway notification)

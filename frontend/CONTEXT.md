@@ -54,6 +54,25 @@ A control that re-runs a failed fetch in place, without a full page reload. The 
 companion to every **Error** state on an Async resource.
 _Avoid_: reload, refresh (those imply a full navigation; a retry is in-place)
 
+### Catalog HTTP responses
+
+**Soft 404**:
+A response that shows the shopper the "not found" page but still replies with HTTP `200`.
+Search tools, link-checkers, uptime monitors and analytics trust the status code over the
+page text, so a dead URL reads as live. The defect issue #34 fixes for product detail.
+_Avoid_: fake 404, false 404
+
+**True 404**:
+A not-found outcome that also carries the HTTP `404` status — what a missing product URL
+should return.
+
+**Streamed response**:
+A response Next begins sending to the browser before the page has finished rendering; a
+loading **skeleton** is what triggers it. Once it starts, the `200` is already committed
+and the response can no longer become a **True 404** — the trade-off behind product
+detail's status handling (ADR-0011).
+_Avoid_: progressive response, partial response
+
 ### Cold start (shared with the deployment story)
 
 **Cold start**:
