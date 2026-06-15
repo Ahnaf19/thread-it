@@ -5,8 +5,7 @@ import secrets
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.cart import price_cart
-from app.crud.catalog import get_active_product_by_slug
+from app.crud.pricing import resolve_lines, to_priced_cart
 from app.enums import OrderStatus
 from app.models import Order, OrderItem, Variant
 from app.schemas.cart import CartItemIn, LineStatus, PricedCart
@@ -40,24 +39,22 @@ async def list_orders(session: AsyncSession, *, status: str | None = None) -> li
 async def create_pending_order(
     session: AsyncSession, items: list[CartItemIn], customer: CustomerIn
 ) -> Order:
-    priced = await price_cart(session, items)
+    resolved = await resolve_lines(session, items)
     # Fulfillable only if every line is exactly available (no adjust/unavailable).
-    if not priced.items or any(ln.status != LineStatus.OK for ln in priced.items):
-        raise CartChangedError(priced)
+    if not resolved or any(line.status != LineStatus.OK for line in resolved):
+        raise CartChangedError(to_priced_cart(resolved))
 
-    order_items: list[OrderItem] = []
-    for line in priced.items:
-        product = await get_active_product_by_slug(session, line.slug)
-        variant = next(v for v in product.variants if v.size == line.size)
-        order_items.append(
-            OrderItem(
-                variant_id=variant.id,
-                product_name=line.name,
-                size=line.size,
-                unit_price=line.unit_price,
-                quantity=line.quantity,
-            )
+    # No re-resolve: ResolvedLine already carries the Variant + snapshot data.
+    order_items = [
+        OrderItem(
+            variant_id=line.variant.id,
+            product_name=line.name,
+            size=line.size,
+            unit_price=line.unit_price,
+            quantity=line.effective_qty,
         )
+        for line in resolved
+    ]
 
     order = Order(
         order_number=_order_number(),
@@ -68,7 +65,7 @@ async def create_pending_order(
         address=customer.address,
         city=customer.city,
         postcode=customer.postcode,
-        total=priced.subtotal,
+        total=sum(line.line_total for line in resolved),
         items=order_items,
     )
     session.add(order)
