@@ -1,6 +1,6 @@
 """Checkout + SSLCOMMERZ callbacks (ADR-0007)."""
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import settings
@@ -8,6 +8,7 @@ from app.crud import checkout as crud
 from app.db import SessionDep
 from app.enums import OrderStatus
 from app.payments import GatewayDep
+from app.rate_limit import CHECKOUT_PER_MINUTE, rate_limit
 from app.schemas.checkout import CheckoutRequest, CheckoutResponse
 
 router = APIRouter(tags=["checkout"])
@@ -15,7 +16,11 @@ router = APIRouter(tags=["checkout"])
 _PAID_STATUSES = {"VALID", "VALIDATED"}
 
 
-@router.post("/checkout", response_model=CheckoutResponse)
+@router.post(
+    "/checkout",
+    response_model=CheckoutResponse,
+    dependencies=[Depends(rate_limit(scope="checkout", limit=CHECKOUT_PER_MINUTE))],
+)
 async def checkout(
     req: CheckoutRequest,
     request: Request,

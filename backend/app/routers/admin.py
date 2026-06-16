@@ -8,6 +8,7 @@ from app.crud import admin as crud
 from app.crud import checkout as checkout_crud
 from app.db import SessionDep
 from app.order_state import IllegalTransition
+from app.rate_limit import LOGIN_PER_MINUTE, rate_limit
 from app.schemas.admin import ProductCreate, ProductUpdate
 from app.schemas.catalog import ProductDetail
 from app.schemas.order import OrderOut, OrderStatusUpdate
@@ -32,7 +33,11 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-@login_router.post("/login", response_model=TokenResponse)
+@login_router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(rate_limit(scope="login", limit=LOGIN_PER_MINUTE))],
+)
 async def login(req: LoginRequest) -> TokenResponse:
     if req.username != settings.admin_username or not verify_password(
         req.password, settings.admin_password_hash
