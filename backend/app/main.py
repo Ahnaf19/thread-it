@@ -25,6 +25,7 @@ app.add_middleware(
 
 app.include_router(products.router)
 app.include_router(cart.router)
+app.include_router(admin.login_router)
 app.include_router(admin.router)
 app.include_router(checkout.router)
 
