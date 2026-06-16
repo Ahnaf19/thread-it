@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,9 @@ export default function CheckoutPage() {
   const [form, setForm] = useState<CheckoutCustomer>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One key per checkout attempt (this mount), reused across double-clicks / retries so
+  // the backend dedupes them into a single order (ADR-0013).
+  const idempotencyKey = useRef<string | null>(null);
 
   function set(key: keyof CheckoutCustomer, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -31,8 +34,9 @@ export default function CheckoutPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    idempotencyKey.current ??= crypto.randomUUID();
     try {
-      const { gateway_url } = await checkout(lines, form);
+      const { gateway_url } = await checkout(lines, form, idempotencyKey.current);
       window.location.href = gateway_url; // hand off to SSLCOMMERZ
     } catch (err) {
       setError(

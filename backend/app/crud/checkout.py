@@ -4,6 +4,7 @@ import secrets
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.pricing import resolve_lines, to_priced_cart
@@ -27,6 +28,10 @@ def _order_number() -> str:
 
 async def get_order_by_number(session: AsyncSession, order_number: str) -> Order | None:
     return await session.scalar(select(Order).where(Order.order_number == order_number))
+
+
+async def get_order_by_idempotency_key(session: AsyncSession, key: str) -> Order | None:
+    return await session.scalar(select(Order).where(Order.idempotency_key == key))
 
 
 async def _lock_order(session: AsyncSession, order_number: str) -> Order | None:
@@ -55,8 +60,19 @@ async def list_orders(session: AsyncSession, *, status: str | None = None) -> li
 
 
 async def create_pending_order(
-    session: AsyncSession, items: list[CartItemIn], customer: CustomerIn
+    session: AsyncSession,
+    items: list[CartItemIn],
+    customer: CustomerIn,
+    idempotency_key: str | None = None,
 ) -> Order:
+    # Idempotent create (ADR-0013): one checkout intent → one Order. A key already on
+    # file returns its Order; a concurrent first-time race is settled by the unique
+    # constraint below. NULL keys (no header) skip dedup entirely.
+    if idempotency_key is not None:
+        existing = await get_order_by_idempotency_key(session, idempotency_key)
+        if existing is not None:
+            return existing
+
     resolved = await resolve_lines(session, items)
     # Fulfillable only if every line is exactly available (no adjust/unavailable).
     if not resolved or any(line.status != LineStatus.OK for line in resolved):
@@ -76,6 +92,7 @@ async def create_pending_order(
 
     order = Order(
         order_number=_order_number(),
+        idempotency_key=idempotency_key,
         status=OrderStatus.PENDING.value,
         name=customer.name,
         email=customer.email,
@@ -87,7 +104,17 @@ async def create_pending_order(
         items=order_items,
     )
     session.add(order)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A concurrent request with the same key won the unique constraint; return its
+        # Order rather than erroring (the loser of the create race — mirrors ADR-0010).
+        await session.rollback()
+        if idempotency_key is not None:
+            existing = await get_order_by_idempotency_key(session, idempotency_key)
+            if existing is not None:
+                return existing
+        raise
     created = await get_order_by_number(session, order.order_number)
     assert created is not None
     return created
