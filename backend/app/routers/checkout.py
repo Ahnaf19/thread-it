@@ -1,6 +1,6 @@
 """Checkout + SSLCOMMERZ callbacks (ADR-0007)."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import settings
@@ -17,10 +17,16 @@ _PAID_STATUSES = {"VALID", "VALIDATED"}
 
 @router.post("/checkout", response_model=CheckoutResponse)
 async def checkout(
-    req: CheckoutRequest, request: Request, session: SessionDep, gateway: GatewayDep
+    req: CheckoutRequest,
+    request: Request,
+    session: SessionDep,
+    gateway: GatewayDep,
+    idempotency_key: str | None = Header(default=None),
 ):
     try:
-        order = await crud.create_pending_order(session, req.items, req.customer)
+        order = await crud.create_pending_order(
+            session, req.items, req.customer, idempotency_key=idempotency_key
+        )
     except crud.CartChangedError as exc:
         # The cart can't be fulfilled as-is — hand back the re-priced cart so the client re-syncs.
         return JSONResponse(status_code=409, content=exc.priced.model_dump())

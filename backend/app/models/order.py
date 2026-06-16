@@ -15,6 +15,11 @@ class Order(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     order_number: Mapped[str] = mapped_column(String, unique=True, index=True)
+    # Client-supplied per-attempt token; one checkout intent → one Order (ADR-0013).
+    # Nullable + unique: NULLs stay distinct in Postgres, so no-key flows don't collide.
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String, unique=True, index=True, nullable=True, default=None
+    )
     status: Mapped[str] = mapped_column(String, default=OrderStatus.PENDING.value, index=True)
 
     # Guest contact / shipping (no accounts in v1).

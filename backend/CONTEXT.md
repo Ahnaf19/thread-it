@@ -82,6 +82,15 @@ checkout time — so the Order is stable even if the catalog later changes. Dist
 from a Cart's Line Item, which references the live catalog.
 _Avoid_: Line Item (reserve that for the Cart)
 
+**Idempotency key**:
+A client-supplied token (the `Idempotency-Key` header) identifying one **checkout intent**,
+so a double-clicked or retried checkout creates the **Order** exactly once instead of
+duplicating it. The shopper's browser mints it per checkout attempt and resends it on retry;
+the backend dedupes on a unique column (ADR-0013). Distinct from the gateway's `tran_id` (the
+Order number): the idempotency key guards Order *creation*, while the `pending→paid` guard
+(ADR-0010) guards payment *application*.
+_Avoid_: request id, nonce, transaction id (that last is the gateway's `tran_id`)
+
 **Order status**:
 The Order's lifecycle, modelled as an explicit state machine (see ADR-0008):
 `pending` → `paid` → `fulfilled`, with `pending` → `failed` / `cancelled` as the

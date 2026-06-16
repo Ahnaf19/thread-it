@@ -137,10 +137,15 @@ export class CartChangedError extends Error {
 export async function checkout(
   items: CartLineInput[],
   customer: CheckoutCustomer,
+  idempotencyKey?: string,
 ): Promise<{ gateway_url: string; order_number: string }> {
+  // Idempotency-Key dedupes a double-clicked / retried checkout into one order (ADR-0013).
   const res = await fetch(`${API_URL}/checkout`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
     body: JSON.stringify({ items, customer }),
   });
   if (res.status === 409) throw new CartChangedError(await res.json());
