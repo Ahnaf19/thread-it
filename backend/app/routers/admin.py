@@ -1,6 +1,6 @@
 """Admin API — login + product management (ADR-0005)."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
@@ -11,9 +11,15 @@ from app.order_state import IllegalTransition
 from app.schemas.admin import ProductCreate, ProductUpdate
 from app.schemas.catalog import ProductDetail
 from app.schemas.order import OrderOut, OrderStatusUpdate
-from app.security import AdminDep, create_access_token, verify_password
+from app.security import create_access_token, require_admin, verify_password
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+# Two routers share the /admin prefix: `login_router` is public (chicken-and-egg —
+# you can't authenticate to get a token), while `router` enforces the admin guard at
+# the router level so every endpoint on it is protected by construction, not by
+# remembering a per-endpoint dependency (ADR-0005). A route-introspecting test locks
+# this in (tests/test_admin_authz.py).
+login_router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
 class LoginRequest(BaseModel):
@@ -26,7 +32,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-@router.post("/login", response_model=TokenResponse)
+@login_router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest) -> TokenResponse:
     if req.username != settings.admin_username or not verify_password(
         req.password, settings.admin_password_hash
@@ -36,22 +42,20 @@ async def login(req: LoginRequest) -> TokenResponse:
 
 
 @router.get("/products", response_model=list[ProductDetail])
-async def list_products(_admin: AdminDep, session: SessionDep) -> list[ProductDetail]:
+async def list_products(session: SessionDep) -> list[ProductDetail]:
     products = await crud.list_all_products(session)
     return [ProductDetail.from_product(p, settings.new_window_days) for p in products]
 
 
 @router.post("/products", response_model=ProductDetail, status_code=201)
-async def create_product(
-    data: ProductCreate, _admin: AdminDep, session: SessionDep
-) -> ProductDetail:
+async def create_product(data: ProductCreate, session: SessionDep) -> ProductDetail:
     product = await crud.create_product(session, data)
     return ProductDetail.from_product(product, settings.new_window_days)
 
 
 @router.patch("/products/{slug}", response_model=ProductDetail)
 async def update_product(
-    slug: str, data: ProductUpdate, _admin: AdminDep, session: SessionDep
+    slug: str, data: ProductUpdate, session: SessionDep
 ) -> ProductDetail:
     product = await crud.update_product(session, slug, data)
     if product is None:
@@ -61,7 +65,7 @@ async def update_product(
 
 @router.get("/orders", response_model=list[OrderOut])
 async def list_orders(
-    _admin: AdminDep, session: SessionDep, status: str | None = None
+    session: SessionDep, status: str | None = None
 ) -> list[OrderOut]:
     orders = await checkout_crud.list_orders(session, status=status)
     return [OrderOut.model_validate(o) for o in orders]
@@ -69,7 +73,7 @@ async def list_orders(
 
 @router.patch("/orders/{order_number}", response_model=OrderOut)
 async def update_order_status(
-    order_number: str, data: OrderStatusUpdate, _admin: AdminDep, session: SessionDep
+    order_number: str, data: OrderStatusUpdate, session: SessionDep
 ) -> OrderOut:
     """Admin status transition (e.g. paid → fulfilled). Illegal moves → 409 (ADR-0008)."""
     try:
