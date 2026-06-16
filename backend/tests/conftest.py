@@ -78,6 +78,17 @@ async def admin_headers(client, admin_password) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Clear the process-wide rate limiter before each test so per-IP counts from
+    one test (the shared httpx client looks like a single IP) can't trip limits in
+    the next (ADR-0014)."""
+    from app.rate_limit import limiter
+
+    limiter.reset()
+    yield
+
+
 class FakeGateway:
     """Stand-in for SSLCOMMERZ — records the last init and returns a fixed URL."""
 

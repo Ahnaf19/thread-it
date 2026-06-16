@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Where the gateway sends the customer's browser back after payment.
     frontend_url: str = "http://localhost:3000"
 
+    # Per-IP rate limiting (ADR-0014). Kill switch; limits themselves live as
+    # constants in app/rate_limit.py.
+    rate_limit_enabled: bool = True
+
     # CORS — comma-separated list of allowed frontend origins.
     # In production this is the Vercel frontend URL; locally it's the Next.js dev server.
     cors_origins: str = "http://localhost:3000"
